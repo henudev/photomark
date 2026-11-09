@@ -48,7 +48,7 @@
           <div class="appearance"><label class="color-label">文字颜色 <input type="color" id="color" value="#ffffff"></label><label class="check"><input type="checkbox" id="shadow" checked>文字描边</label><label class="check"><input type="checkbox" id="background">半透明底色</label></div>
           </section>
           <section id="panel-export" role="tabpanel" aria-labelledby="tab-export" class="setting-panel hidden">
-          <div class="field"><label for="format">输出格式</label><select id="format"><option value="png">PNG · 无损压缩（推荐）</option><option value="tiff">TIFF · LZW 无损压缩</option><option value="jpeg">JPEG · 质量 100 / 4:4:4</option></select><small id="quality-note">保留原始尺寸；无损保存水印合成后的画面，文件可能变大。</small></div>
+          <div class="field"><div id="format-title" class="field-label">导出格式</div><div class="format-choices" role="radiogroup" aria-labelledby="format-title"><label class="format-choice"><input id="format-png" type="radio" name="export-format" value="png" checked><strong>PNG</strong><span>无损 · 画质优先</span></label><label class="format-choice"><input id="format-jpeg" type="radio" name="export-format" value="jpeg"><strong>JPG</strong><span>高质量 · 适合分享</span></label></div><small id="legacy-format-note" class="hidden">正在续处理旧版 TIFF 任务；选择 PNG 或 JPG 会创建新任务。</small><small id="quality-note" aria-live="polite">PNG 无损保存水印合成后的画面，保留原始尺寸，文件通常较大。</small></div>
           <label class="check metadata-check"><input type="checkbox" id="preserveMetadata" checked>保留 EXIF 等拍摄元数据</label>
           <small class="privacy-note">元数据可能包含拍摄地点；分享前可取消。ICC 色彩配置始终保留。</small>
           <small class="panel-note">原照片始终保留。输出保持原始分辨率和文件夹结构。</small>
@@ -70,7 +70,7 @@
       </section>
     </div>
     <section class="batch card">
-      <div class="batch-top"><div class="batch-copy"><div class="batch-heading"><h2 id="batch-title">准备好，为照片留下印记</h2><button id="errors" class="text-button error-link hidden" aria-haspopup="dialog"><span id="errors-summary">查看失败项目</span></button></div><p id="batch-status">选择照片后即可开始，任务进度会自动保存。</p></div><div class="batch-actions"><button id="open-output" class="button ghost" disabled>打开输出目录 ↗</button><button id="pause" class="button secondary hidden">暂停</button><button id="start" class="button primary" disabled>开始批量处理 <span>→</span></button></div></div>
+      <div class="batch-top"><div class="batch-copy"><div class="batch-heading"><h2 id="batch-title">准备好，为照片留下印记</h2><button id="errors" class="text-button error-link hidden" aria-haspopup="dialog"><span id="errors-summary">查看失败项目</span></button></div><p id="batch-status">选择照片后即可开始，任务进度会自动保存。</p></div><div class="batch-actions"><label class="batch-format" for="format"><span>导出格式</span><select id="format" aria-describedby="quality-note"><option value="png">PNG · 无损</option><option value="jpeg">JPG · 高质量</option><option value="tiff" hidden disabled>TIFF · 旧任务</option></select></label><button id="open-output" class="button ghost" disabled>打开输出目录 ↗</button><button id="pause" class="button secondary hidden">暂停</button><button id="start" class="button primary" disabled>开始批量处理 <span>→</span></button></div></div>
       <progress id="progress" max="1" value="0" aria-label="批处理进度"></progress>
       <div class="batch-bottom"><span><i class="status-dot"></i><span id="progress-count">等待选择照片</span></span><span>完成一张，记录一张 · 中断后可继续</span></div>
     </section>

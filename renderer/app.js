@@ -30,7 +30,13 @@ function updateControls() {
   $('format-help').classList.toggle('hidden', $('date-preset').value !== 'custom');
   for (const key of ['fontScale', 'margin', 'opacity']) $(`${key}-value`).textContent = `${$(key).value}%`;
   document.querySelectorAll('[data-position]').forEach(button => { const active = button.dataset.position === position; button.classList.toggle('selected', active); button.setAttribute('aria-pressed', active); });
-  $('quality-note').textContent = $('format').value === 'jpeg' ? 'JPEG 会重新编码，有损耗；质量 100、4:4:4 可减少损失。要求无损请选 PNG / TIFF。' : '保留原始尺寸；无损保存水印合成后的画面，文件可能变大。';
+  const format = $('format').value;
+  document.querySelectorAll('[name="export-format"]').forEach(input => input.checked = input.value === format);
+  $('legacy-format-note').classList.toggle('hidden', format !== 'tiff');
+  $('quality-note').textContent = format === 'jpeg'
+    ? 'JPG 保留原始尺寸，质量 100、4:4:4；文件通常较小，但仍是有损压缩。'
+    : format === 'tiff' ? '兼容旧版 TIFF LZW 无损任务；新任务可选择 PNG 或 JPG。'
+    : 'PNG 无损保存水印合成后的画面，保留原始尺寸，文件通常较大。';
 }
 function updateLocationControls(info) {
   const mode = $('locationMode').value;
@@ -123,7 +129,7 @@ async function choose(kind) {
 function setRunning(value) {
   running = value;
   $('settings-body').querySelectorAll('input,select,button').forEach(el => el.disabled = value);
-  for (const id of ['recursive', 'choose-source', 'choose-output', 'reset', 'restore-job']) $(id).disabled = value;
+  for (const id of ['recursive', 'choose-source', 'choose-output', 'reset', 'restore-job', 'format']) $(id).disabled = value;
   $('start').disabled = value || !files.length;
   $('pause').classList.toggle('hidden', !value);
   $('pause').disabled = false;
@@ -144,6 +150,9 @@ function progress(value) {
   $('errors-list').replaceChildren(...(value.errors || []).map(item => { const li = document.createElement('li'); li.textContent = `${item.file}：${item.error}`; return li; }));
 }
 for (const key of settingsKeys.filter(key => key !== 'recursive')) $(key).addEventListener(['range', 'text', 'color'].includes($(key).type) ? 'input' : 'change', changed);
+document.querySelectorAll('[name="export-format"]').forEach(input => input.addEventListener('change', () => {
+  if (input.checked) { $('format').value = input.value; changed(); }
+}));
 $('recursive').addEventListener('change', () => { changed(); loadPhotos(); });
 $('date-preset').addEventListener('change', () => { if ($('date-preset').value !== 'custom') $('dateFormat').value = $('date-preset').value; changed(); });
 document.querySelectorAll('[data-position]').forEach(button => button.addEventListener('click', () => { position = button.dataset.position; changed(); }));
@@ -178,6 +187,8 @@ document.querySelectorAll('[data-tab]').forEach(button => {
 $('start').addEventListener('click', async () => {
   if (running || !files.length) return;
   setRunning(true);
+  $('batch-title').textContent = '正在准备批量处理…';
+  $('batch-status').textContent = `输出格式：${{ png: 'PNG', jpeg: 'JPG', tiff: 'TIFF' }[$('format').value]} · 正在扫描并核对处理进度`;
   try { state.lastJob = { source: state.source, output: state.output, settings: settings() }; $('restore-job').classList.remove('hidden'); await api.start(state.source, state.output, settings()); }
   catch (error) { setRunning(false); message(error); $('batch-title').textContent = '任务未能启动'; $('batch-status').textContent = cleanError(error); }
 });
