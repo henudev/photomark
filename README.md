@@ -6,7 +6,9 @@
 
 `release/` 中的文件不需要安装 Node.js：
 
-GitHub 仓库提交的是源码，不包含应用安装包、开发依赖和本地测试输出。先按下方“本地开发与打包”构建，对应成品会生成在本地 `release/` 目录。
+**直接使用：[下载最新 Release](https://github.com/henudev/photomark/releases/latest)**，在页面下方的 **Assets** 选择对应系统的成品。
+
+代码仓库不提交应用安装包、开发依赖和本地测试输出；安装包作为 Release 附件分发。也可以按下方“本地开发与打包”在本地生成 `release/` 目录。
 
 | 平台 | 交付文件 | 使用方法 |
 | --- | --- | --- |
@@ -126,7 +128,25 @@ npm run build:win
 
 macOS 构建仅生成 Apple 芯片 arm64 ZIP；Windows 构建生成 x86-64 便携 EXE。本项目使用 Electron + sharp 预编译依赖，macOS 上的打包前置脚本会显式准备 Apple 芯片 Mac 与 Windows x64 所需模块。`signAndEditExecutable: false` 允许当前无 Wine 环境生成 Windows 便携包，应用内层 EXE 的图标 / 发布者资源仍为 Electron 默认值；正式签名发行应在 Windows 上配置资源编辑与签名。
 
-`.github/workflows/build.yml` 可在各自的原生平台构建，执行核心测试并上传构建产物。可在仓库 Actions 页面手动运行，也可推送 `v*` 标签触发。普通代码推送不会自动触发构建。
+`.github/workflows/build.yml` 在 Apple 芯片 Mac 和 Windows x64 上分别执行核心测试与打包。Actions 页面手动运行时仅构建临时产物；推送 `v*` 版本标签时，两平台成功后自动创建 GitHub Release，上传两个成品、使用说明、产物说明和 SHA-256 校验文件，再公开发布。普通代码推送不会自动触发构建。
+
+### 发布到 GitHub Release
+
+Release Notes 是页面上的版本说明；真正可下载的安装包放在该页面的 Assets 中，源码 ZIP / tar.gz 由 GitHub 根据版本标签自动提供。
+
+发布新版本时：
+
+1. 更新 `package.json` 与 `package-lock.json` 的版本号，更新文档中的版本与下载文件名。
+2. 新建对应说明，例如 `release-notes/v0.1.3.md`。
+3. 提交并推送代码，再推送相同版本标签：
+
+```sh
+git push origin main
+git tag v0.1.3
+git push origin v0.1.3
+```
+
+标签必须等于 `v` 加 `package.json` 版本号；不一致或缺少版本说明时构建会停止。工作流会先上传草稿附件，确认完整后再发布；不覆盖已公开版本。失败后可在 Actions 重跑对应工作流，未完成草稿可以继续上传。
 
 ## 源码结构
 

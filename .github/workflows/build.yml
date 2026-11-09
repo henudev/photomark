@@ -1,20 +1,24 @@
-name: Build PhotoMark desktop
-on:
+name: Build and release PhotoMark desktop
+'on':
   workflow_dispatch:
   push:
     tags: ['v*']
 permissions:
   contents: read
+concurrency:
+  group: photomark-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build:
+    name: Build ${{ matrix.label }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-15
             command: build:mac
             label: macOS-arm64
-          - os: windows-latest
+          - os: windows-2025
             command: build:win
             label: Windows-x64
     runs-on: ${{ matrix.os }}
@@ -24,6 +28,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Check release version
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const version = require('./package.json').version;
+          if (process.env.GITHUB_REF_TYPE === 'tag') {
+            const expected = `v${version}`;
+            if (process.env.GITHUB_REF_NAME !== expected) throw new Error(`标签必须与 package.json 版本一致：${expected}`);
+            if (!fs.existsSync(`release-notes/${expected}.md`)) throw new Error(`缺少版本说明：release-notes/${expected}.md`);
+          }
+          console.log(`PhotoMark ${version} — ${process.platform}/${process.arch}`);
+          NODE
       - run: npm ci
       - run: npm test
       - run: npm run ${{ matrix.command }}
@@ -36,3 +53,69 @@ jobs:
             release/*.zip
             release/*.exe
           if-no-files-found: error
+          retention-days: 7
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: PhotoMark-*
+          path: release-files
+          merge-multiple: true
+      - name: Prepare documentation and checksums
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const version = require('./package.json').version;
+          const dir = 'release-files';
+          fs.copyFileSync('README.md', path.join(dir, '使用说明.md'));
+          fs.copyFileSync('产物说明.md', path.join(dir, '产物说明.md'));
+          const files = [`PhotoMark-${version}-mac-arm64.zip`, `PhotoMark-${version}-windows-x64.exe`, '使用说明.md', '产物说明.md'];
+          const checksums = files.map(file => {
+            const buffer = fs.readFileSync(path.join(dir, file));
+            if (!buffer.length) throw new Error(`空的发布附件：${file}`);
+            return `${crypto.createHash('sha256').update(buffer).digest('hex')}  ${file}`;
+          });
+          fs.writeFileSync(path.join(dir, 'SHA256SUMS.txt'), checksums.join('\n') + '\n');
+          console.log(checksums.join('\n'));
+          NODE
+      - name: Upload assets and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          notes="release-notes/${RELEASE_TAG}.md"
+          if gh release view "$RELEASE_TAG" --json isDraft > release-state.json 2>/dev/null; then
+            if ! node -e "if (!require('./release-state.json').isDraft) process.exit(1)"; then
+              echo "Release 已发布，不覆盖现有附件；请使用新的版本号。" >&2
+              exit 1
+            fi
+            gh release edit "$RELEASE_TAG" --title "PhotoMark ${RELEASE_TAG}" --notes-file "$notes"
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "PhotoMark ${RELEASE_TAG}" --notes-file "$notes"
+          fi
+          gh release upload "$RELEASE_TAG" \
+            "release-files/PhotoMark-${version}-mac-arm64.zip" \
+            "release-files/PhotoMark-${version}-windows-x64.exe" \
+            "release-files/使用说明.md" \
+            "release-files/产物说明.md" \
+            "release-files/SHA256SUMS.txt" --clobber
+          if [[ "$version" == *-* ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
+          fi
