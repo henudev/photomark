@@ -1,6 +1,15 @@
 name: Build and release PhotoMark desktop
 'on':
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '重试发布的已有标签；与 artifact_run_id 一起填写，留空则只构建'
+        required: false
+        default: ''
+      artifact_run_id:
+        description: '两个平台均构建成功的 Actions run ID，用于重试发布'
+        required: false
+        default: ''
   push:
     tags: ['v*']
 permissions:
@@ -11,6 +20,7 @@ concurrency:
 jobs:
   build:
     name: Build ${{ matrix.label }}
+    if: github.event_name != 'workflow_dispatch' || inputs.artifact_run_id == ''
     strategy:
       fail-fast: false
       matrix:
@@ -57,20 +67,55 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      always() &&
+      ((startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' &&
+      inputs.artifact_run_id != '' && needs.build.result == 'skipped'))
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Verify artifact provenance and successful builds
+        run: |
+          set -euo pipefail
+          [[ "$ARTIFACT_RUN_ID" =~ ^[0-9]+$ ]]
+          target_sha="$(git rev-parse HEAD)"
+          artifact_sha="$(gh api "repos/$GH_REPO/actions/runs/$ARTIFACT_RUN_ID" --jq '.head_sha')"
+          if [[ "$target_sha" != "$artifact_sha" ]]; then
+            echo "构建产物与发布标签的源码提交不一致，停止发布。" >&2
+            exit 1
+          fi
+          gh api "repos/$GH_REPO/actions/runs/$ARTIFACT_RUN_ID/jobs?filter=latest&per_page=100" > artifact-jobs.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const version = require('./package.json').version;
+          if (process.env.RELEASE_TAG !== `v${version}`) throw new Error('发布标签与 package.json 版本不一致');
+          if (!fs.existsSync(`release-notes/v${version}.md`)) throw new Error('缺少版本说明');
+          const { jobs } = require('./artifact-jobs.json');
+          for (const name of ['Build macOS-arm64', 'Build Windows-x64']) {
+            if (!jobs.some(job => job.name === name && job.conclusion === 'success')) throw new Error(`缺少成功构建：${name}`);
+          }
+          NODE
       - uses: actions/download-artifact@v4
         with:
           pattern: PhotoMark-*
           path: release-files
           merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
       - name: Prepare documentation and checksums
         run: |
           node <<'NODE'
@@ -79,9 +124,12 @@ jobs:
           const crypto = require('node:crypto');
           const version = require('./package.json').version;
           const dir = 'release-files';
-          fs.copyFileSync('README.md', path.join(dir, '使用说明.md'));
-          fs.copyFileSync('产物说明.md', path.join(dir, '产物说明.md'));
-          const files = [`PhotoMark-${version}-mac-arm64.zip`, `PhotoMark-${version}-windows-x64.exe`, '使用说明.md', '产物说明.md'];
+          fs.copyFileSync('README.md', path.join(dir, 'README-zh-CN.md'));
+          fs.copyFileSync('产物说明.md', path.join(dir, 'ARTIFACTS-zh-CN.md'));
+          const notes = fs.readFileSync(`release-notes/${process.env.RELEASE_TAG}.md`, 'utf8')
+            .replaceAll('使用说明.md', 'README-zh-CN.md').replaceAll('产物说明.md', 'ARTIFACTS-zh-CN.md');
+          fs.writeFileSync(path.join(dir, 'RELEASE_NOTES.md'), notes);
+          const files = [`PhotoMark-${version}-mac-arm64.zip`, `PhotoMark-${version}-windows-x64.exe`, 'README-zh-CN.md', 'ARTIFACTS-zh-CN.md'];
           const checksums = files.map(file => {
             const buffer = fs.readFileSync(path.join(dir, file));
             if (!buffer.length) throw new Error(`空的发布附件：${file}`);
@@ -91,14 +139,10 @@ jobs:
           console.log(checksums.join('\n'));
           NODE
       - name: Upload assets and publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
-          notes="release-notes/${RELEASE_TAG}.md"
+          notes="release-files/RELEASE_NOTES.md"
           if gh release view "$RELEASE_TAG" --json isDraft > release-state.json 2>/dev/null; then
             if ! node -e "if (!require('./release-state.json').isDraft) process.exit(1)"; then
               echo "Release 已发布，不覆盖现有附件；请使用新的版本号。" >&2
@@ -111,8 +155,8 @@ jobs:
           gh release upload "$RELEASE_TAG" \
             "release-files/PhotoMark-${version}-mac-arm64.zip" \
             "release-files/PhotoMark-${version}-windows-x64.exe" \
-            "release-files/使用说明.md" \
-            "release-files/产物说明.md" \
+            "release-files/README-zh-CN.md" \
+            "release-files/ARTIFACTS-zh-CN.md" \
             "release-files/SHA256SUMS.txt" --clobber
           if [[ "$version" == *-* ]]; then
             gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
