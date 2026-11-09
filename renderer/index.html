@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>PhotoMark · 照片水印</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon">▣</span><span>PhotoMark<small>让每张照片，留住时间与地点</small></span></div>
+    <div class="header-right"><span class="local-badge"><i></i> 本地处理 · 照片不上传</span><span class="version">v0.1</span></div>
+  </header>
+  <main>
+    <section class="directories card">
+      <div class="section-title"><div><span class="step">01</span><h2>选择照片</h2><span id="scan-summary" class="muted">支持 JPG、PNG、WebP、8 位 TIFF</span></div><div class="directory-tools"><label class="check"><input type="checkbox" id="recursive">包含子文件夹</label><button id="restore-job" class="text-button hidden">恢复上次任务 ↻</button></div></div>
+      <div class="directory-grid">
+        <div class="directory-row"><label>源目录</label><div id="source-path" class="path empty">选择存放照片的文件夹</div><button id="choose-source" class="button secondary">选择 <span>↗</span></button></div>
+        <div class="directory-row"><label>输出到</label><div id="output-path" class="path empty">选择源目录后自动填写</div><button id="choose-output" class="button ghost">更改 <span>↗</span></button></div>
+      </div>
+    </section>
+    <div class="workspace">
+      <aside class="settings card">
+        <div class="section-title"><div><span class="step">02</span><h2>水印设置</h2></div><button id="reset" class="text-button">重置</button></div>
+        <div class="setting-tabs" role="tablist" aria-label="水印设置分类">
+          <button id="tab-date" role="tab" data-tab="date" aria-controls="panel-date" aria-selected="false" tabindex="-1">日期</button>
+          <button id="tab-location" role="tab" data-tab="location" aria-controls="panel-location" aria-selected="true" class="active">地点<span id="location-tab-indicator" class="tab-indicator hidden" aria-label="地点缺失，可手动补充"></span></button>
+          <button id="tab-style" role="tab" data-tab="style" aria-controls="panel-style" aria-selected="false" tabindex="-1">样式</button>
+          <button id="tab-export" role="tab" data-tab="export" aria-controls="panel-export" aria-selected="false" tabindex="-1">导出</button>
+        </div>
+        <div class="setting-body" id="settings-body">
+          <section id="panel-date" role="tabpanel" aria-labelledby="tab-date" class="setting-panel hidden">
+          <div class="field"><label for="timeSource">日期来源</label><select id="timeSource"><option value="exif">拍摄时间优先（EXIF）</option><option value="filename">文件名时间优先</option><option value="modified">文件修改时间</option><option value="manual">手动指定时间</option><option value="none">不显示日期</option></select></div>
+          <div id="manual-date-field" class="field hidden"><label for="manualDate">指定时间</label><input id="manualDate" type="datetime-local" step="1"></div>
+          <div class="field"><label for="date-preset">日期格式</label><div id="date-format-controls"><select id="date-preset"><option value="yyyy-MM-dd HH:mm:ss">2026-11-09 14:30:25</option><option value="yyyy-MM-dd HH:mm">2026-11-09 14:30</option><option value="yyyy-MM-dd">2026-11-09</option><option value="yyyy/MM/dd HH:mm:ss">2026/11/09 14:30:25</option><option value="yyyy年MM月dd日 HH:mm:ss">2026年11月09日 14:30:25</option><option value="custom">自定义</option></select><input id="dateFormat" class="hidden" aria-label="自定义日期格式" placeholder="yyyy-MM-dd HH:mm:ss"></div><small id="format-help" class="hidden">年 yyyy · 月 MM · 日 dd · 时 HH · 分 mm · 秒 ss</small></div>
+          <small class="panel-note">优先读取拍摄时间；缺失时使用文件名或文件修改时间，并在预览中提示。</small>
+          </section>
+          <section id="panel-location" role="tabpanel" aria-labelledby="tab-location" class="setting-panel">
+          <div class="field"><label for="locationMode">地点</label><select id="locationMode"><option value="auto">自动提取地点（EXIF 优先）</option><option value="manual">全部使用手动地点</option><option value="gps">仅显示 EXIF GPS 坐标</option><option value="none">不显示地点</option></select><small id="location-status" role="status" aria-live="polite">选择照片后自动提取位置信息。</small><div id="location-manual-field" class="field hidden"><label id="location-input-label" for="location">手动补充地点</label><input id="location" maxlength="100" placeholder="例如：杭州 · 西湖" aria-label="水印地点"><small id="location-scope">仅用于本批未提取到位置的照片，不覆盖其他照片已有的位置。</small></div></div>
+          <small class="panel-note">每张照片单独提取。照片只有 GPS 时显示经纬度，全程离线处理。</small>
+          </section>
+          <section id="panel-style" role="tabpanel" aria-labelledby="tab-style" class="setting-panel hidden">
+          <div class="field"><label>显示位置</label><div class="positions" role="group" aria-label="水印位置"><button data-position="top-left">↖ 左上角</button><button data-position="top-right">右上角 ↗</button><button data-position="bottom-left">↙ 左下角</button><button data-position="bottom-right" class="selected">右下角 ↘</button></div></div>
+          <div class="field range-field"><label for="fontScale">文字大小 <output id="fontScale-value">2.6%</output></label><input id="fontScale" type="range" min="0.8" max="8" step="0.1"></div>
+          <div class="field range-field"><label for="margin">边距 <output id="margin-value">3%</output></label><input id="margin" type="range" min="1" max="12" step="0.5"></div>
+          <div class="field range-field"><label for="opacity">不透明度 <output id="opacity-value">95%</output></label><input id="opacity" type="range" min="10" max="100" step="1"></div>
+          <div class="appearance"><label class="color-label">文字颜色 <input type="color" id="color" value="#ffffff"></label><label class="check"><input type="checkbox" id="shadow" checked>文字描边</label><label class="check"><input type="checkbox" id="background">半透明底色</label></div>
+          </section>
+          <section id="panel-export" role="tabpanel" aria-labelledby="tab-export" class="setting-panel hidden">
+          <div class="field"><label for="format">输出格式</label><select id="format"><option value="png">PNG · 无损压缩（推荐）</option><option value="tiff">TIFF · LZW 无损压缩</option><option value="jpeg">JPEG · 质量 100 / 4:4:4</option></select><small id="quality-note">保留原始尺寸；无损保存水印合成后的画面，文件可能变大。</small></div>
+          <label class="check metadata-check"><input type="checkbox" id="preserveMetadata" checked>保留 EXIF 等拍摄元数据</label>
+          <small class="privacy-note">元数据可能包含拍摄地点；分享前可取消。ICC 色彩配置始终保留。</small>
+          <small class="panel-note">原照片始终保留。输出保持原始分辨率和文件夹结构。</small>
+          </section>
+        </div>
+      </aside>
+      <section class="preview card">
+        <div class="section-title"><div><span class="step">03</span><h2>效果预览</h2><span class="preview-tag">与导出共用水印设置</span></div><div class="preview-actions"><button id="zoom" class="button tiny" disabled>放大预览 ⤢</button><button id="compare" class="button tiny" disabled>查看原图</button></div></div>
+        <div class="preview-stage" id="preview-stage">
+          <div id="empty-state" class="empty-state"><div class="photo-symbol">▧<span>＋</span></div><h3>让回忆，有迹可循</h3><p>选择照片文件夹，预览第一张作品</p><button class="button primary" id="empty-choose">选择照片文件夹</button><small>全程离线 · 原图保留 · 支持断点续处理</small></div>
+          <img id="preview-image" alt="照片水印效果预览" class="hidden">
+          <div id="preview-loading" class="loading hidden"><span class="spinner"></span>正在生成预览</div>
+          <div id="preview-error" class="preview-error hidden"></div>
+          <span class="stage-label" id="stage-label">预览缩略图 · 导出保持原始尺寸</span>
+        </div>
+        <div class="photo-nav"><button id="previous" class="nav-button" disabled aria-label="上一张">←</button><div class="photo-name"><strong id="photo-name">尚未选择照片</strong><span id="photo-meta">选择后可逐张切换预览</span></div><span id="photo-index">0 / 0</span><button id="next" class="nav-button" disabled aria-label="下一张">→</button></div>
+        <div class="preview-info"><span id="time-info">日期、地点与位置均可自定义</span><span class="resolution-badge" id="resolution">原始尺寸导出</span></div>
+        <div class="source-note" id="source-note">优先读取 EXIF 拍摄时间；缺失时依次使用文件名时间、文件修改时间。</div>
+      </section>
+    </div>
+    <section class="batch card">
+      <div class="batch-top"><div class="batch-copy"><div class="batch-heading"><h2 id="batch-title">准备好，为照片留下印记</h2><button id="errors" class="text-button error-link hidden" aria-haspopup="dialog"><span id="errors-summary">查看失败项目</span></button></div><p id="batch-status">选择照片后即可开始，任务进度会自动保存。</p></div><div class="batch-actions"><button id="open-output" class="button ghost" disabled>打开输出目录 ↗</button><button id="pause" class="button secondary hidden">暂停</button><button id="start" class="button primary" disabled>开始批量处理 <span>→</span></button></div></div>
+      <progress id="progress" max="1" value="0" aria-label="批处理进度"></progress>
+      <div class="batch-bottom"><span><i class="status-dot"></i><span id="progress-count">等待选择照片</span></span><span>完成一张，记录一张 · 中断后可继续</span></div>
+    </section>
+    <footer>PhotoMark <span>把时间留在画面，把原图留给自己。</span><span id="platform-label"></span></footer>
+  </main>
+  <div id="toast" role="status" class="toast hidden"></div>
+  <dialog id="zoom-dialog"><div class="zoom-header"><strong>原始分辨率预览</strong><span id="zoom-info">正在加载…</span><button id="zoom-fit" class="button tiny">以 1:1 查看</button><button id="zoom-close" class="button tiny" aria-label="关闭放大预览">关闭 ×</button></div><div id="zoom-stage" class="zoom-stage"><img id="zoom-image" alt="原始分辨率水印预览"></div></dialog>
+  <dialog id="errors-dialog"><div class="zoom-header"><strong>处理失败的照片</strong><span>修复原因后可继续处理</span><button id="export-errors" class="button tiny">导出 CSV ↗</button><button id="errors-close" class="button tiny">关闭 ×</button></div><ul id="errors-list" class="errors-list"></ul></dialog>
+  <script src="app.js"></script>
+</body>
+</html>

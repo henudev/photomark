@@ -1,0 +1,11 @@
+node_modules/
+release/
+demo-output/
+demo-photos/
+verification/
+.photomark/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log

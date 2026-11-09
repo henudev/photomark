@@ -1,0 +1,76 @@
+{
+  "name": "photomark-desktop",
+  "version": "0.1.2",
+  "private": true,
+  "description": "PhotoMark — 离线批量照片水印工具",
+  "author": "PhotoMark",
+  "license": "MIT",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "test:ui": "node scripts/ui-smoke.cjs",
+    "test:location-ui": "node scripts/location-ui-smoke.cjs",
+    "demo": "node scripts/create-demo.cjs",
+    "prepare:native": "node scripts/prepare-native.cjs",
+    "prebuild:mac": "npm run prepare:native",
+    "prebuild:win": "npm run prepare:native",
+    "build:mac": "electron-builder --mac zip --arm64 --publish never",
+    "build:win": "electron-builder --win portable --x64 --publish never",
+    "build:all": "npm run build:mac && npm run build:win"
+  },
+  "dependencies": {
+    "sharp": "0.35.5",
+    "exifr": "7.1.3",
+    "opentype.js": "1.3.4"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.1",
+    "playwright-core": "1.61.1"
+  },
+  "build": {
+    "appId": "com.photomark.desktop",
+    "productName": "PhotoMark",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "renderer/**/*",
+      "assets/**/*",
+      "package.json",
+      "!node_modules/@img/sharp-darwin-x64/**/*",
+      "!node_modules/@img/sharp-libvips-darwin-x64/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*",
+      "assets/*.otf"
+    ],
+    "npmRebuild": false,
+    "mac": {
+      "category": "public.app-category.photography",
+      "identity": null,
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": false,
+      "artifactName": "PhotoMark-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false,
+      "icon": "assets/icon.ico",
+      "artifactName": "PhotoMark-${version}-windows-x64.${ext}"
+    },
+    "portable": {
+      "artifactName": "PhotoMark-${version}-windows-x64.exe"
+    }
+  }
+}
